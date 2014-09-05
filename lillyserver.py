@@ -140,7 +140,6 @@ class LillyTargetProfile(jsondocument.JSONDocument):
 	
 	def __init__(self, trial, json):
 		super().__init__('tp-{}'.format(trial.nct), 'target-profile', json)
-		print(self.json)
 		self.trial = trial
 	
 	
