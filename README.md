@@ -21,10 +21,14 @@ Docs Generation
 ---------------
 
 Docs are generated with [Doxygen][] and [doxypypy][].
-You will need to install doxypypy the old-fashioned way, checking out the repo and issuing `python setup.py install`, then just run Doxygen:
+You will need to install doxypypy the old-fashioned way, checking out the repo and issuing `python setup.py install`, then just run Doxygen.
+Running Doxygen will put the generated documentation into `docs`, the HTML files into `docs/html`.
+Those files make up the content of the `gh-pages` branch.
+I usually perform a second checkout of the _gh-pages_ branch and copy the html files over, with:
 
 ```sh
 doxygen
+rsync -a docs/html/ ../py-clinical-trials-web/
 ```
 
 
