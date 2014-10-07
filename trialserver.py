@@ -20,7 +20,7 @@ class TrialServer(object):
 		self.search_headers = {}		# in addition to `headers`
 	
 	
-	# Mark: Requests
+	# MARK: Requests
 	
 	def base_request(self, method, add_headers, url, data=None):
 		headers = self.headers
@@ -47,7 +47,7 @@ class TrialServer(object):
 		return self.api_request(mth, self.trial_headers, api.replace('{id}', trial_id))
 	
 	
-	# Mark: Trial Search
+	# MARK: Trial Search
 	
 	def search_request(self, params, override_url=None):
 		""" Returns a request that performs a search operation.

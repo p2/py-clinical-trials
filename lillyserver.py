@@ -88,7 +88,7 @@ class LillyTrial(trial.Trial):
 		#self.check_cache()
 	
 	
-	# Mark: Target Profiles
+	# MARK: Target Profiles
 	
 	def cached_profile_filename():
 		if self.nct is None or LillyTrial.tp_cache_dir is None:

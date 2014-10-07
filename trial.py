@@ -28,7 +28,7 @@ class Trial(jsondocument.JSONDocument):
 		self._papers = None
 	
 	
-	# Mark: Properties
+	# MARK: Properties
 	
 	@property
 	def nct(self):
@@ -130,7 +130,7 @@ class Trial(jsondocument.JSONDocument):
 		return (dateval, parsed)
 	
 	
-	# Mark: API
+	# MARK: API
 	
 	@property
 	def js(self):
@@ -156,7 +156,7 @@ class Trial(jsondocument.JSONDocument):
 		return js
 	
 	
-	# Mark: Trial Locations
+	# MARK: Trial Locations
 	
 	def locations_closest_to(self, lat, lng, limit=0, open_only=True):
 		""" Returns a list of tuples, containing the trial location and their
@@ -172,11 +172,7 @@ class Trial(jsondocument.JSONDocument):
 			for loc_json in self.location:
 				loc = TrialLocation(self, loc_json)
 				
-				if not open_only \
-					or 'Recruiting' == loc.status \
-					or 'Not yet recruiting' == loc.status \
-					or 'Enrolling by invitation' == loc.status:
-					
+				if not open_only or loc.is_open:
 					closest.append((loc, loc.km_distance_from(lat, lng)))
 		
 		# sort and truncate
@@ -188,7 +184,7 @@ class Trial(jsondocument.JSONDocument):
 		return closest
 	
 	
-	# Mark: Keywords
+	# MARK: Keywords
 	
 	def cleanup_keywords(self, keywords):
 		""" Cleanup keywords. """
@@ -221,7 +217,7 @@ class TrialLocation(object):
 			self.geo = json_loc.get('geodata')
 	
 	
-	# Mark: Contact
+	# MARK: Contact
 	
 	@property
 	def address_parts(self):
@@ -248,8 +244,19 @@ class TrialLocation(object):
 		
 		return loc_contact
 	
+	@property
+	def is_open(self):
+		""" Checks the receiver's status and determines whether this location is
+		(or will be) recruiting patients.
+		
+		:returns: A bool indicating whether this location is or will be recruiting
+		"""
+		return 'Recruiting' == self.status \
+			or 'Not yet recruiting' == self.status \
+			or 'Enrolling by invitation' == self.status
 	
-	# Mark: Location
+	
+	# MARK: Location
 	
 	@property
 	def city(self):
@@ -264,7 +271,7 @@ class TrialLocation(object):
 		return km_distance_between(lat, lng, lat2, lng2)
 	
 	
-	# Mark: Serialization
+	# MARK: Serialization
 	
 	def json(self):
 		return {
