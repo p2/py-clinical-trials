@@ -49,6 +49,22 @@ class TrialServer(object):
 	
 	# MARK: Trial Search
 	
+	def find(self, params=None, request=None):
+		""" Perform a search for trials.
+		
+		:param params: A dictionary with search parameters
+		:param request: Optional prepared request instance; overrides params
+		:returns: A tuple with:
+			- list of Trial instances; may be empty but never None
+			- metadata dictionary (contains 'total' [int] and more)
+			- a request instance to request the next page of results
+		"""
+		if request is None:
+			request = self.search_request(params)
+		
+		res = self.request(request)
+		return self.search_process_response(res)
+	
 	def search_request(self, params, override_url=None):
 		""" Returns a request that performs a search operation.
 		
@@ -92,15 +108,21 @@ class TrialServer(object):
 		return path, None
 	
 	def search_process_response(self, response):
-		""" Takes response data and returns a list of Trial instances, a
+		""" Takes a response instance and returns a list of Trial instances, a
 		meta dictionary and the URL to retrieve to get more results (if
 		applicable).
 		
-		By default assumes a 'results' and 'meta' dictionary.
+		:param response: Assumes that `response` contains a 'results' and
+			'meta' dictionary.
+		:returns: A tuple with:
+			- list of Trial instances; may be empty but never None
+			- metadata dictionary
+			- a request instance to request the next page of results
 		"""
 		trials = []
-		meta = response.get('meta')
-		results = response.get('results') or []
+		ret = response.json()
+		meta = ret.get('meta')
+		results = ret.get('results') or []
 		for result in results:
 			trial = Trial(result.get('id'), result)
 			trials.append(trial)
@@ -114,6 +136,15 @@ class TrialServer(object):
 		""" Perform a simple GET request against the server.
 		"""
 		req = self.api_request('GET', {'Accept': accept}, url)
+		return self.request(req)
+	
+	def request(self, req):
+		""" Executes the given request
+		
+		:param req: The requests request instance
+		:raises: On responses >= 400
+		:returns: A requests response object
+		"""
 		session = requests.Session()
 		prepped = session.prepare_request(req)
 		res = session.send(prepped)

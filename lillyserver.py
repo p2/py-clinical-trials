@@ -58,18 +58,20 @@ class LillyV2Server(trialserver.TrialServer):
 		return path, None
 	
 	def search_process_response(self, response):
+		ret = response.json()
 		trials = []
 		meta = {
-			'total': response.get('total_count') or 0,
+			'total': ret.get('total_count') or 0,
 		}
-		results = response.get('results') or []
+		results = ret.get('results') or []
 		for result in results:
 			id_info = result.get('id_info') or {}
 			trial = LillyTrial(id_info.get('nct_id'), result)
 			trial.retrieve_profile(self)
 			trials.append(trial)
 		
-		more = response.get('_links', {}).get('next', {}).get('href')
+		more_link = ret.get('_links', {}).get('next', {}).get('href')
+		more = self.base_request('GET', None, more_link)
 		
 		return trials, meta, more
 
