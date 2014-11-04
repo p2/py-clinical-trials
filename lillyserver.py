@@ -70,8 +70,10 @@ class LillyV2Server(trialserver.TrialServer):
 			trial.retrieve_profile(self)
 			trials.append(trial)
 		
+		more = None
 		more_link = ret.get('_links', {}).get('next', {}).get('href')
-		more = self.base_request('GET', None, more_link)
+		if more_link is not None:
+			more = self.base_request('GET', None, more_link)
 		
 		return trials, meta, more
 
@@ -82,33 +84,17 @@ class LillyTrial(trial.Trial):
 	Provides a cache for downloaded and codified target profiles.
 	"""
 	
-	tp_cache_dir = 'target-profile-cache'
-	
 	def __init__(self, nct=None, json=None):
 		super().__init__(nct, json)
 		self.profile = None
-		#self.check_cache()
+		self.check_cache()
 	
 	
 	# MARK: Target Profiles
 	
-	def cached_profile_filename():
-		if self.nct is None or LillyTrial.tp_cache_dir is None:
-			return None
-		return os.path.join(LillyTrial.tp_cache_dir, self.nct + '-profile.json')
-		
 	def check_cache(self):
-		ppth = self.cached_profile_filename()
-		if ppth is None or not os.path.exists(ppth):
-			return
-		
-		# codified profile
-		mtime = os.path.getmtime(ppth)
-		if time.time() - mtime > 3600:			# older than an hour
-			os.remove(ppth)
-		else:
-			with open(ppth, 'r') as handle:
-				self.profile = LillyTargetProfile(self, json.load(handle))
+		if self.profile is None:
+			self.profile = LillyTargetProfile.retrieve(self)
 	
 	def retrieve_profile(self, server):
 		if self.profile is not None:
@@ -121,27 +107,68 @@ class LillyTrial(trial.Trial):
 				
 				# got one, download
 				if href is not None:
-					sess = requests.Session()
-					req = server.base_request('GET', None, href)
-					res = sess.send(sess.prepare_request(req))
-					if res.ok:
-						js = res.json()
-						self.profile = LillyTargetProfile(self, js)
-						
-						# cache
-						ppth = self.cached_profile_filename()
-						if ppth is not None:
-							with open(ppth, 'w') as h:
-								h.write(js)
-		
-	
+					try:
+						self.profile = LillyTargetProfile.load_from(href, server)
+					except Exception as e:
+						pass
+
 
 class LillyTargetProfile(jsondocument.JSONDocument):
 	""" Represent a target profile.
 	"""
-	
 	def __init__(self, trial, json):
 		super().__init__('tp-{}'.format(trial.nct), 'target-profile', json)
 		self.trial = trial
 	
+	@classmethod
+	def load_from(cls, href, server):
+		res = server.get(href)
+		res.raise_for_status()
+		js = res.json()
+		
+		LillyTargetProfileCache().store(trial, js)
+		
+		return cls(self, js)
+	
+	@classmethod
+	def retrieve(cls, trial):
+		js = LillyTargetProfileCache().retrieve(trial)
+		return cls(trial, js)
+
+
+class LillyTargetProfileCache(object):
+	""" Handles caching target profiles.
+	"""
+	def __init__(self, cache_dir='target-profile-cache'):
+		self.cache_dir = cache_dir
+	
+	def cache_filename(self, trial):
+		if trial.nct is None or self.cache_dir is None:
+			return None
+		if not os.path.exists(self.cache_dir):
+			try:
+				os.mkdir(self.cache_dir)
+			except Exception as e:
+				pass
+		return os.path.join(self.cache_dir, trial.nct + '-profile.json')
+	
+	def retrieve(self, trial):
+		ppth = self.cache_filename(trial)
+		if ppth is None or not os.path.exists(ppth):
+			return None
+		
+		# remove if older than a day
+		mtime = os.path.getmtime(ppth)
+		if time.time() - mtime > 86400:
+			os.remove(ppth)
+			return None
+		
+		with open(ppth, 'r', encoding='UTF-8') as handle:
+			return json.load(handle)
+	
+	def store(self, trial, js):
+		ppth = self.cache_filename(trial)
+		if ppth is not None:
+			with open(ppth, 'w', encoding='UTF-8') as handle:
+				handle.write(js)
 	

@@ -132,10 +132,10 @@ class TrialServer(object):
 	
 	# MARK: Utilities
 	
-	def get(self, url, accept='application/json'):
-		""" Perform a simple GET request against the server.
+	def get(self, path, accept='application/json'):
+		""" Perform a simple GET request against the given path on the server.
 		"""
-		req = self.api_request('GET', {'Accept': accept}, url)
+		req = self.api_request('GET', {'Accept': accept}, path)
 		return self.request(req)
 	
 	def request(self, req):
