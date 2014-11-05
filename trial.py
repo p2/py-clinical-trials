@@ -118,13 +118,21 @@ class Trial(jsondocument.JSONDocument):
 	
 	@property
 	def parsed_eligibility(self):
+		""" Takes CTG's plain text criteria, does some preprocessing and pipes
+		it through Markdown. Preprocessing is needed because of leading
+		whitespace.
+		"""
 		if self._parsed_eligibility is None:
 			elig = self.eligibility
 			if 'criteria' in elig:
-				plain = elig['criteria'].get('textblock')
-				if plain:
-					# TODO: process plain
-					elig['html'] = markdown.markdown(plain)
+				txt = elig['criteria'].get('textblock')
+				if txt:
+					txt = re.sub(r'^ +', r' ', txt, flags=re.MULTILINE)
+					txt = txt.replace('>', '&gt;')
+					txt = txt.replace('<', '&lt;')
+					txt = markdown.markdown(txt)
+					txt = re.sub(r'(</?li>)\s*</?p>', r'\1', txt)	# unwrap <li><p></p></li>
+					elig['html'] = txt
 				del elig['criteria']
 			self._parsed_eligibility = elig
 		return self._parsed_eligibility
@@ -159,7 +167,7 @@ class Trial(jsondocument.JSONDocument):
 	# MARK: API
 	
 	@property
-	def js(self):
+	def json(self):
 		""" The JSON to return for a JSON API call.
 		"""
 		js = {}
@@ -182,7 +190,7 @@ class Trial(jsondocument.JSONDocument):
 		if self.eligibility:
 			js['eligibility'] = self.parsed_eligibility
 		if self.locations is not None:
-			js['locations'] = [l.js for l in self.locations]
+			js['locations'] = [l.json for l in self.locations]
 		
 		return js
 	
@@ -306,7 +314,7 @@ class TrialLocation(object):
 	# MARK: Serialization
 	
 	@property
-	def js(self):
+	def json(self):
 		return {
 			'status': self.status,
 			'status_color': self.status_color,
