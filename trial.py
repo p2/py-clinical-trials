@@ -166,12 +166,11 @@ class Trial(jsondocument.JSONDocument):
 	
 	# MARK: API
 	
-	@property
-	def json(self):
+	def for_api(self):
 		""" The JSON to return for a JSON API call.
 		"""
 		js = {}
-		api = self.api
+		api = self.as_json()
 		
 		for key in [
 				'_id',
