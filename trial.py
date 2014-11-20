@@ -20,8 +20,8 @@ class Trial(jsondocument.JSONDocument):
 	""" Describes a trial found on ClinicalTrials.gov.
 	"""
 	
-	def __init__(self, nct=None, json=None):
-		super().__init__(nct, 'trial', json)
+	def __init__(self, nct=None, json_dict=None):
+		super().__init__(nct, 'trial', json_dict)
 		self.process_title()
 		self.process_interventions()
 		self.process_phases()
@@ -243,7 +243,7 @@ class TrialLocation(object):
 			self.pi = json_loc.get('investigator')
 	
 	
-	# MARK: Contact
+	# MARK: Properties
 	
 	@property
 	def best_contact(self):
