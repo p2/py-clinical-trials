@@ -49,11 +49,13 @@ class TrialServer(object):
 	
 	# MARK: Trial Search
 	
-	def find(self, params=None, request=None):
+	def find(self, params=None, request=None, trial_class=None):
 		""" Perform a search for trials.
 		
 		:param params: A dictionary with search parameters
 		:param request: Optional prepared request instance; overrides params
+		:param trial_class: Optional class to use to instantiate trials,
+		    `Trial` by default.
 		:returns: A tuple with:
 			- list of Trial instances; may be empty but never None
 			- metadata dictionary (contains 'total' [int] and more)
@@ -63,7 +65,7 @@ class TrialServer(object):
 			request = self.search_request(params)
 		
 		res = self.request(request)
-		return self.search_process_response(res)
+		return self.search_process_response(res, trial_class)
 	
 	def search_request(self, params, override_url=None):
 		""" Returns a request that performs a search operation.
@@ -107,7 +109,7 @@ class TrialServer(object):
 		path = "{}?{}".format(path, '&'.join(par))
 		return path, None
 	
-	def search_process_response(self, response):
+	def search_process_response(self, response, trial_class=None):
 		""" Takes a response instance and returns a list of Trial instances, a
 		meta dictionary and the URL to retrieve to get more results (if
 		applicable).
@@ -119,12 +121,13 @@ class TrialServer(object):
 			- metadata dictionary
 			- a request instance to request the next page of results
 		"""
+		trial_class = trial_class if trial_class is not None else Trial
 		trials = []
 		ret = response.json()
 		meta = ret.get('meta')
 		results = ret.get('results') or []
 		for result in results:
-			trial = Trial(result.get('id'), result)
+			trial = trial_class(result.get('id'), result)
 			trials.append(trial)
 		
 		return trials, meta, None

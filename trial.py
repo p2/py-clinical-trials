@@ -7,10 +7,6 @@
 #	2014-07-29	Migrated to Python 3 and JSONDocument
 #
 
-import sys
-import os.path
-sys.path.insert(0, os.path.dirname(__file__))
-
 import datetime
 import logging
 import re
@@ -26,7 +22,11 @@ class Trial(jsondocument.JSONDocument):
 	
 	def __init__(self, nct=None, json=None):
 		super().__init__(nct, 'trial', json)
-		self._locations = None
+		self.process_title()
+		self.process_interventions()
+		self.process_phases()
+		self.process_locations()
+		self.parse_eligibility()
 	
 	
 	# MARK: Properties
@@ -35,11 +35,10 @@ class Trial(jsondocument.JSONDocument):
 	def nct(self):
 		return self.id
 	
-	@property
-	def title(self):
+	def process_title(self):
 		""" Construct the best title possible.
 		"""
-		if not self.__dict__.get('title'):
+		if not self.title:
 			title = self.brief_title
 			if not title:
 				title = self.official_title
@@ -49,13 +48,7 @@ class Trial(jsondocument.JSONDocument):
 					title = "%s: %s" % (acronym, title)
 				else:
 					title = acronym
-			self.__dict__['title'] = title
-		
-		return self.__dict__.get('title')
-	
-	@title.setter
-	def title(self, value):
-		self.__dict__['title'] = value
+			self.title = title
 	
 	@property
 	def entered(self):
@@ -64,7 +57,7 @@ class Trial(jsondocument.JSONDocument):
 		now = datetime.datetime.now()
 		first = self.date('firstreceived_date')
 		return round((now - first[1]).days / 365.25 * 10) / 10 if first[1] else None
-		
+	
 	@property
 	def last_updated(self):
 		""" How many years ago was the trial last updated.
@@ -73,11 +66,10 @@ class Trial(jsondocument.JSONDocument):
 		last = self.date('lastchanged_date')
 		return round((now - last[1]).days / 365.25 * 10) / 10 if last[1] else None
 	
-	@property
-	def interventions(self):
-		""" Returns a set of intervention types of the receiver.
+	def process_interventions(self):
+		""" Assigns a set of intervention types to the `interventions` property
 		"""
-		if self.__dict__.get('interventions') is None:
+		if self.interventions is None:
 			types = set()
 			if self.intervention is not None:
 				for intervent in self.intervention:
@@ -88,41 +80,34 @@ class Trial(jsondocument.JSONDocument):
 			if 0 == len(types):
 				types.add('Observational')
 			
-			self.__dict__['interventions'] = list(types)
-		
-		return self.__dict__.get('interventions')
+			self.interventions = list(types)
 	
-	@property
-	def phases(self):
-		""" Returns a set of phases in drug trials.
+	def process_phases(self):
+		""" Assigns a set of phases in drug trials to the `phases` property.
 		Non-drug trials might still declare trial phases, we don't filter those.
 		"""
-		if self.__dict__.get('phases') is None:
+		if self.phases is None:
 			my_phases = self.phase
 			if my_phases and 'N/A' != my_phases:
 				phases = set(my_phases.split('/'))
 			else:
 				phases = set(['N/A'])
-			self.__dict__['phases'] = list(phases)
-		
-		return self.__dict__.get('phases')
+			self.phases = list(phases)
 	
-	@property
-	def locations(self):
-		if self._locations is None:
+	def process_locations(self):
+		if self.locations is None:
 			locs = []
 			for loc in self.location:		# note the missing "s"
 				locs.append(TrialLocation(self, loc))
-			self._locations = locs
-		return self._locations
+			self.locations = locs
 	
-	@property
-	def parsed_eligibility(self):
+	def parse_eligibility(self):
 		""" Takes CTG's plain text criteria, does some preprocessing and pipes
 		it through Markdown. Preprocessing is needed because of leading
 		whitespace.
+		Assigns the result to the receiver's `parsed_eligibility` property.
 		"""
-		if self._parsed_eligibility is None:
+		if self.parsed_eligibility is None:
 			elig = self.eligibility
 			if 'criteria' in elig:
 				txt = elig['criteria'].get('textblock')
@@ -134,11 +119,10 @@ class Trial(jsondocument.JSONDocument):
 					txt = re.sub(r'(</?li>)\s*</?p>', r'\1', txt)	# unwrap <li><p></p></li>
 					elig['html'] = txt
 				del elig['criteria']
-			self._parsed_eligibility = elig
-		return self._parsed_eligibility
+			self.parsed_eligibility = elig
 	
 	
-	# Mark: Utilities
+	# MARK: Utilities
 	
 	def date(self, dt):
 		""" Returns a tuple of the string date and the parsed Date object for
@@ -173,9 +157,10 @@ class Trial(jsondocument.JSONDocument):
 		api = self.as_json()
 		
 		for key in [
-				'_id',
+				'_id', 'title',
 				'brief_summary', 'keyword',
 				'source',
+				'interventions', 'phases',
 				'condition', 'primary_outcome', 'secondary_outcome',
 				'arm_group',
 			]:
@@ -183,13 +168,10 @@ class Trial(jsondocument.JSONDocument):
 			if val:
 				js[key] = val
 		
-		js['title'] = self.title
-		js['interventions'] = self.interventions
-		js['phases'] = self.phases
-		if self.eligibility:
+		if self.parsed_eligibility:
 			js['eligibility'] = self.parsed_eligibility
 		if self.locations is not None:
-			js['locations'] = [l.json for l in self.locations]
+			js['locations'] = [l.for_api() for l in self.locations]
 		
 		return js
 	
@@ -312,8 +294,7 @@ class TrialLocation(object):
 	
 	# MARK: Serialization
 	
-	@property
-	def json(self):
+	def for_api(self):
 		return {
 			'status': self.status,
 			'status_color': self.status_color,

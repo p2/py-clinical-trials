@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import sys
-import os.path
-sys.path.insert(0, os.path.dirname(__file__))
-
+import os
 import json
 import time
 import requests
@@ -57,7 +54,9 @@ class LillyV2Server(trialserver.TrialServer):
 		path = "{}?size={}&{}".format(path, self.batch_size, '&'.join(par))
 		return path, None
 	
-	def search_process_response(self, response):
+	def search_process_response(self, response, trial_class=None):
+		trial_class = trial_class if trial_class is not None else LillyTrial
+		
 		ret = response.json()
 		trials = []
 		meta = {
@@ -66,8 +65,7 @@ class LillyV2Server(trialserver.TrialServer):
 		results = ret.get('results') or []
 		for result in results:
 			id_info = result.get('id_info') or {}
-			trial = LillyTrial(id_info.get('nct_id'), result)
-			trial.retrieve_profile(self)
+			trial = trial_class(id_info.get('nct_id'), result)
 			trials.append(trial)
 		
 		more = None
@@ -139,34 +137,38 @@ class LillyTargetProfile(jsondocument.JSONDocument):
 class LillyTargetProfileCache(object):
 	""" Handles caching target profiles.
 	"""
-	def __init__(self, cache_dir='target-profile-cache'):
-		self.cache_dir = cache_dir
-	
+	def __init__(self, directory):
+		if not os.path.exists(directory):
+			raise Exception('Cache directory "{}" does not exist, please create it'.format(directory))
+		
+		self.cache_dir = directory
+		self.can_write = False
+		self.timeout = None				# number, in seconds
+		
 	def cache_filename(self, trial):
 		if trial.nct is None or self.cache_dir is None:
 			return None
-		if not os.path.exists(self.cache_dir):
-			try:
-				os.mkdir(self.cache_dir)
-			except Exception as e:
-				pass
-		return os.path.join(self.cache_dir, trial.nct + '-profile.json')
+		return os.path.join(self.cache_dir, trial.nct + '.json')
 	
 	def retrieve(self, trial):
 		ppth = self.cache_filename(trial)
 		if ppth is None or not os.path.exists(ppth):
 			return None
 		
-		# remove if older than a day
-		mtime = os.path.getmtime(ppth)
-		if time.time() - mtime > 86400:
-			os.remove(ppth)
-			return None
+		# remove if older than timeout
+		if self.timeout is not None:
+			mtime = os.path.getmtime(ppth)
+			if time.time() - mtime > self.timeout:
+				os.remove(ppth)
+				return None
 		
 		with open(ppth, 'r', encoding='UTF-8') as handle:
 			return json.load(handle)
 	
 	def store(self, trial, js):
+		if not self.can_write:
+			return
+		
 		ppth = self.cache_filename(trial)
 		if ppth is not None:
 			with open(ppth, 'w', encoding='UTF-8') as handle:
