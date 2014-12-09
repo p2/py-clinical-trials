@@ -28,6 +28,13 @@ class Trial(jsondocument.JSONDocument):
 		self.process_locations()
 		self.parse_eligibility()
 	
+	def as_json(self):
+		js_dict = super().as_json()
+		if 'locations' in js_dict:
+			del js_dict['locations']
+		
+		return js_dict
+	
 	
 	# MARK: Properties
 	
