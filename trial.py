@@ -12,7 +12,7 @@ import logging
 import re
 import markdown
 
-from jsondocument import jsondocument
+import jsondocument
 from geo import km_distance_between
 
 
@@ -95,7 +95,7 @@ class Trial(jsondocument.JSONDocument):
 			self.phases = list(phases)
 	
 	def process_locations(self):
-		if self.locations is None:
+		if self.locations is None and self.location is not None:
 			locs = []
 			for loc in self.location:		# note the missing "s"
 				locs.append(TrialLocation(self, loc))
@@ -109,7 +109,7 @@ class Trial(jsondocument.JSONDocument):
 		"""
 		if self.parsed_eligibility is None:
 			elig = self.eligibility
-			if 'criteria' in elig:
+			if elig is not None and 'criteria' in elig:
 				txt = elig['criteria'].get('textblock')
 				if txt:
 					txt = re.sub(r'^ +', r' ', txt, flags=re.MULTILINE)

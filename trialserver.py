@@ -40,11 +40,19 @@ class TrialServer(object):
 		return self.base_request(method, add_headers, url, data)
 	
 	def trial_request(self, trial_id):
-		mth, api = self.search_endpoint.split(' ')
+		mth, api = self.trial_endpoint.split(' ')
 		if not mth or not api:
 			raise Exception("Trial method and/or API endpoint is not defined")
 		
 		return self.api_request(mth, self.trial_headers, api.replace('{id}', trial_id))
+	
+	
+	# MARK: Trial Retrieval
+	
+	def get_trial(self, trial_id, trial_class=None):
+		trial_class = trial_class if trial_class is not None else Trial
+		res = self.request(self.trial_request(trial_id))
+		return trial_class(trial_id, res.json())
 	
 	
 	# MARK: Trial Search

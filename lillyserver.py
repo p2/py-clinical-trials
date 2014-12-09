@@ -8,7 +8,7 @@ import requests
 
 import trialserver
 import trial
-from jsondocument import jsondocument
+import jsondocument
 
 
 class LillyV2Server(trialserver.TrialServer):
