@@ -7,15 +7,12 @@
 #	2014-07-29	Migrated to Python 3 and JSONDocument
 #
 
-import sys
-import os.path
-sys.path.insert(0, os.path.dirname(__file__))
-
 import datetime
 import logging
 import re
+import markdown
 
-from jsondocument import jsondocument
+import jsondocument
 from geo import km_distance_between
 
 
@@ -23,9 +20,20 @@ class Trial(jsondocument.JSONDocument):
 	""" Describes a trial found on ClinicalTrials.gov.
 	"""
 	
-	def __init__(self, nct=None, json=None):
-		super().__init__(nct, 'trial', json)
-		self._papers = None
+	def __init__(self, nct=None, json_dict=None):
+		super().__init__(nct, 'trial', json_dict)
+		self.process_title()
+		self.process_interventions()
+		self.process_phases()
+		self.process_locations()
+		self.parse_eligibility()
+	
+	def as_json(self):
+		js_dict = super().as_json()
+		if 'locations' in js_dict:
+			del js_dict['locations']
+		
+		return js_dict
 	
 	
 	# MARK: Properties
@@ -34,27 +42,20 @@ class Trial(jsondocument.JSONDocument):
 	def nct(self):
 		return self.id
 	
-	@property
-	def title(self):
+	def process_title(self):
 		""" Construct the best title possible.
 		"""
-		if not self.__dict__.get('title'):
-			title = self.official_title
+		if not self.title:
+			title = self.brief_title
 			if not title:
-				title = self.brief_title
+				title = self.official_title
 			acronym = self.acronym
 			if acronym:
 				if title:
 					title = "%s: %s" % (acronym, title)
 				else:
 					title = acronym
-			self.__dict__['title'] = title
-		
-		return self.__dict__.get('title')
-	
-	@title.setter
-	def title(self, value):
-		self.__dict__['title'] = value
+			self.title = title
 	
 	@property
 	def entered(self):
@@ -63,7 +64,7 @@ class Trial(jsondocument.JSONDocument):
 		now = datetime.datetime.now()
 		first = self.date('firstreceived_date')
 		return round((now - first[1]).days / 365.25 * 10) / 10 if first[1] else None
-		
+	
 	@property
 	def last_updated(self):
 		""" How many years ago was the trial last updated.
@@ -72,11 +73,10 @@ class Trial(jsondocument.JSONDocument):
 		last = self.date('lastchanged_date')
 		return round((now - last[1]).days / 365.25 * 10) / 10 if last[1] else None
 	
-	@property
-	def interventions(self):
-		""" Returns a set of intervention types of the receiver.
+	def process_interventions(self):
+		""" Assigns a set of intervention types to the `interventions` property
 		"""
-		if self.__dict__.get('interventions') is None:
+		if self.interventions is None:
 			types = set()
 			if self.intervention is not None:
 				for intervent in self.intervention:
@@ -87,24 +87,49 @@ class Trial(jsondocument.JSONDocument):
 			if 0 == len(types):
 				types.add('Observational')
 			
-			self.__dict__['interventions'] = list(types)
-		
-		return self.__dict__.get('interventions')
+			self.interventions = list(types)
 	
-	@property
-	def phases(self):
-		""" Returns a set of phases in drug trials.
+	def process_phases(self):
+		""" Assigns a set of phases in drug trials to the `phases` property.
 		Non-drug trials might still declare trial phases, we don't filter those.
 		"""
-		if self.__dict__.get('phases') is None:
+		if self.phases is None:
 			my_phases = self.phase
 			if my_phases and 'N/A' != my_phases:
 				phases = set(my_phases.split('/'))
 			else:
 				phases = set(['N/A'])
-			self.__dict__['phases'] = list(phases)
-		
-		return self.__dict__.get('phases')
+			self.phases = list(phases)
+	
+	def process_locations(self):
+		if self.locations is None and self.location is not None:
+			locs = []
+			for loc in self.location:		# note the missing "s"
+				locs.append(TrialLocation(self, loc))
+			self.locations = locs
+	
+	def parse_eligibility(self):
+		""" Takes CTG's plain text criteria, does some preprocessing and pipes
+		it through Markdown. Preprocessing is needed because of leading
+		whitespace.
+		Assigns the result to the receiver's `parsed_eligibility` property.
+		"""
+		if self.parsed_eligibility is None:
+			elig = self.eligibility
+			if elig is not None and 'criteria' in elig:
+				txt = elig['criteria'].get('textblock')
+				if txt:
+					txt = re.sub(r'^ +', r' ', txt, flags=re.MULTILINE)
+					txt = txt.replace('>', '&gt;')
+					txt = txt.replace('<', '&lt;')
+					txt = markdown.markdown(txt)
+					txt = re.sub(r'(</?li>)\s*</?p>', r'\1', txt)	# unwrap <li><p></p></li>
+					elig['html'] = txt
+				del elig['criteria']
+			self.parsed_eligibility = elig
+	
+	
+	# MARK: Utilities
 	
 	def date(self, dt):
 		""" Returns a tuple of the string date and the parsed Date object for
@@ -132,26 +157,28 @@ class Trial(jsondocument.JSONDocument):
 	
 	# MARK: API
 	
-	@property
-	def js(self):
+	def for_api(self):
 		""" The JSON to return for a JSON API call.
 		"""
 		js = {}
-		api = self.api
-		# print(api.keys())
+		api = self.as_json()
+		
 		for key in [
-				"_id",
-				"brief_summary",
-				"overall_contact", "overall_contact_backup"
-				"condition", "primary_outcome",
+				'_id', 'title',
+				'brief_summary', 'keyword',
+				'source',
+				'interventions', 'phases',
+				'condition', 'primary_outcome', 'secondary_outcome',
+				'arm_group',
 			]:
 			val = api.get(key)
 			if val:
 				js[key] = val
 		
-		js['title'] = self.title
-		js['interventions'] = self.interventions
-		js['phases'] = self.phases
+		if self.parsed_eligibility:
+			js['eligibility'] = self.parsed_eligibility
+		if self.locations is not None:
+			js['locations'] = [l.for_api() for l in self.locations]
 		
 		return js
 	
@@ -207,25 +234,23 @@ class TrialLocation(object):
 	
 	def __init__(self, trial, json_loc=None):
 		self.trial = trial
+		self.status_color = 'red'
+		self.geo = None
 		
 		if json_loc is not None:
 			self.status = json_loc.get('status')
+			if self.status:
+				if re.search(r'not\s+[\w\s]*\s+recruiting', self.status, flags=re.IGNORECASE):
+					self.status_color = 'orange'
+				elif re.search(r'recruiting', self.status, flags=re.IGNORECASE):
+					self.status_color = 'green'
 			self.contact = json_loc.get('contact')
 			self.contact_backup = json_loc.get('contact_backup')
 			self.facility = json_loc.get('facility')
 			self.pi = json_loc.get('investigator')
-			self.geo = json_loc.get('geodata')
 	
 	
-	# MARK: Contact
-	
-	@property
-	def address_parts(self):
-		if self.contact is not None:
-			return trial_contact_parts(self.contact)
-		if self.contact_backup is not None:
-			return trial_contact_parts(self.contact_backup)
-		return None
+	# MARK: Properties
 	
 	@property
 	def best_contact(self):
@@ -240,9 +265,13 @@ class TrialLocation(object):
 		
 		if loc_contact is None \
 			or (loc_contact.get('email') is None and loc_contact.get('phone') is None):
-			loc_contact = getattr(self.trial, 'overall_contact')
+			loc_contact = self.trial.overall_contact
 		
-		return loc_contact
+		if loc_contact is None \
+			or (loc_contact.get('email') is None and loc_contact.get('phone') is None):
+			loc_contact = self.trial.overall_contact_backup
+		
+		return trial_contact_parts(loc_contact)
 	
 	@property
 	def is_open(self):
@@ -258,13 +287,12 @@ class TrialLocation(object):
 	
 	# MARK: Location
 	
-	@property
-	def city(self):
-		return self.geo.get('formatted')
-	
 	def km_distance_from(self, lat, lng):
 		""" Calculates the distance in kilometers between the location and the
 		given lat/long pair using the Haversine formula. """
+		if self.geo is None:
+			return None
+		
 		lat2 = self.geo.get('latitude') if self.geo else 0
 		lng2 = self.geo.get('longitude') if self.geo else 0
 		
@@ -273,21 +301,22 @@ class TrialLocation(object):
 	
 	# MARK: Serialization
 	
-	def json(self):
+	def for_api(self):
 		return {
 			'status': self.status,
+			'status_color': self.status_color,
 			'facility': self.facility,
 			'investigator': self.pi,
 			'contact': self.best_contact,
-			'geodata': self.geo
+			'geodata': self.geo,
 		}
 
 
 def trial_contact_parts(contact):
-	""" Returns a list with name, email, phone composed from the given
-	contact dictionary. """
+	""" Returns a dict with 'name', 'email' and 'phone', composed from the
+	given contact dictionary. """
 	if not contact:
-		return ['No contact']
+		return {'name': 'No contact'}
 	
 	# name and degree
 	nameparts = []
@@ -302,11 +331,11 @@ def trial_contact_parts(contact):
 	if 'degrees' in contact and contact['degrees']:
 		name = '%s, %s' % (name, contact['degrees'])
 	
-	parts = [name]
+	parts = {'name': name}
 	
 	# email
 	if 'email' in contact and contact['email']:
-		parts.append(contact['email'])
+		parts['email'] = contact['email']
 	
 	# phone
 	if 'phone' in contact and contact['phone']:
@@ -314,7 +343,7 @@ def trial_contact_parts(contact):
 		if 'phone_ext' in contact and contact['phone_ext']:
 			fon = '%s (%s)' % (fon, contact['phone_ext'])
 		
-		parts.append(fon)
+		parts['phone'] = fon
 	
 	return parts
 	
