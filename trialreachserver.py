@@ -11,16 +11,16 @@ import trial
 import jsondocument
 
 
-class LillyV2Server(trialserver.TrialServer):
-	""" Trial server as provided by LillyCOI's v2 API on
-	https://developer.lillycoi.com/.
+class TrialReachServer(trialserver.TrialServer):
+	""" Trial server as provided by TrialReach's API (formerly LillyCOI) on
+	https://data.trialreach.com/.
 	"""
 	
 	def __init__(self, key_secret):
 		if key_secret is None:
 			raise Exception("You must provide the base64-encoded {key}:{secret} combination")
 		
-		super().__init__("https://data.lillycoi.com/")
+		super().__init__("https://data.trialreach.com/")
 		self.batch_size = 50
 		self.headers = {
 			'Authorization': 'Basic {}'.format(key_secret)
@@ -57,7 +57,7 @@ class LillyV2Server(trialserver.TrialServer):
 		return path, None
 	
 	def search_process_response(self, response, trial_class=None):
-		trial_class = trial_class if trial_class is not None else LillyTrial
+		trial_class = trial_class if trial_class is not None else TrialReachTrial
 		
 		ret = response.json()
 		trials = []
@@ -78,8 +78,8 @@ class LillyV2Server(trialserver.TrialServer):
 		return trials, meta, more
 
 
-class LillyTrial(trial.Trial):
-	""" Extend the CTG base trial by what Lilly's API is providing.
+class TrialReachTrial(trial.Trial):
+	""" Extend the CTG base trial by what TrialReach's API is providing.
 	
 	Provides a cache for downloaded and codified target profiles.
 	"""
@@ -104,12 +104,12 @@ class LillyTrial(trial.Trial):
 				# got one, download
 				if href is not None:
 					try:
-						self.target_profile = LillyTargetProfile.load_from(href, server)
+						self.target_profile = TrialTargetProfile.load_from(href, server)
 					except Exception as e:
 						pass
 
 
-class LillyTargetProfile(jsondocument.JSONDocument):
+class TrialTargetProfile(jsondocument.JSONDocument):
 	""" Represent a target profile.
 	"""
 	def __init__(self, trial, json):

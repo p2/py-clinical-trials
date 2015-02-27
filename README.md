@@ -13,8 +13,8 @@ There is a `Trial` superclass intended to represent a ClinicalTrials.gov trial.
 It is designed to work off of JSON data.
 
 The `TrialServer` class is intended to be subclassed and can be used to retrieve _Trial_ instances from a specific server.
-A subclass `LillyV2Server` connecting to [LillyCOI's v2][lillycoi] trial API server is included.
-That class also contains a _Trial_ subclass `LillyTrial` to facilitate working with extra data provided by Lilly.
+A subclass `TrialReachServer` connecting to [TrialReach's][trialreachapi] trial API server is included.
+That class also contains a _Trial_ subclass `TrialReachTrial` to facilitate working with extra data provided by TrialReach.
 
 
 Docs Generation
@@ -33,6 +33,6 @@ rsync -a docs/html/ ../py-clinical-trials-web/
 
 
 [docs]: https://p2.github.io/py-clinical-trials
-[lillycoi]: https://developer.lillycoi.com
+[trialreachapi]: https://developer.trialreach.com
 [doxygen]: http://www.stack.nl/~dimitri/doxygen
 [doxypypy]: https://github.com/Feneric/doxypypy
