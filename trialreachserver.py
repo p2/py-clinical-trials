@@ -8,7 +8,10 @@ import requests
 
 import trialserver
 import trial
-import jsondocument
+if __package__:
+	from .jsondocument import jsondocument
+else:
+	from jsondocument import jsondocument
 
 
 class TrialReachServer(trialserver.TrialServer):

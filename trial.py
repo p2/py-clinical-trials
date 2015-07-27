@@ -12,7 +12,10 @@ import logging
 import re
 import markdown
 
-import jsondocument
+if __package__:
+	from .jsondocument import jsondocument
+else:
+	from jsondocument import jsondocument
 from geo import km_distance_between
 
 
